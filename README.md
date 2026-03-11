@@ -44,25 +44,6 @@ pip install -e ".[dev]"
 
 If you are using a virtual environment as recommended above, you can add this module to the path of the virtual environment by adding a .pth file to the /lib/pythonx.xx/site-packages folder in your virutal environment. The contents of the .pth file should be a single line with the location of the module directory with no trailing spaces or lines.
 
-## Quick Start
-
-```python
-from polychemtools.visualization import GPCTraceGraph
-
-# Generate a molecular weight distribution plot with automatic peak analysis
-sample = GPCTraceGraph.mw_graph_from_data(
-    'tosoh',                          # Instrument type
-    'data/polymer_sample.txt',        # Data file
-    'calibrations.json:my_calibration', # Calibration reference
-    'output.png',                     # Output file
-    show_bounds=True                  # Show integration regions
-)
-
-print(sample)
-# PolymerSample(1 polymer):
-#   Peak 1: Mn: 15234 g/mol; Mw: 23451 g/mol; D: 1.54
-```
-
 ## Usage
 
 Instrumental data should be stored as a .txt or .csv file. These files can generally be exported in this format from the instruments they are generated on. The list of supported data formats is below.

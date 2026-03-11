@@ -315,26 +315,3 @@ graph = TraceGraph(
 
 The default stylesheet is located at `polychemtools/visualization/default.mplstyle`. You can copy and modify this file to create custom styles.
 
-## Usage in Emacs Org-Mode
-
-The visualization module is designed for use in org-mode code blocks:
-
-```org
-#+begin_src python :session gpc :results file :file gpc_output.png
-from polychemtools.visualization import GPCTraceGraph
-
-sample = GPCTraceGraph.mw_graph_from_data(
-    'tosoh',
-    '../data/polymer_sample.txt',
-    '../data/calibrations.json:sample_calibration',
-    'gpc_output.png',
-    show_bounds=True
-)
-
-print(sample)
-'gpc_output.png'  # Return filename for org-mode display
-#+end_src
-
-#+RESULTS:
-[[file:gpc_output.png]]
-```
