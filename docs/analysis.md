@@ -1,530 +1,331 @@
 # Analysis Module
 
-The analysis module provides classes for analyzing processed chromatography and calorimetry data, including molecular weight calculations and thermal transition analysis.
+The analysis module provides classes for calculating molecular weight statistics, thermal transitions, and other derived quantities from raw instrument data.
 
-## Module: `polychemtools.analysis`
+## GPC Analysis
 
----
-
-## GPCTrace
-
-```python
-from polychemtools.analysis.gpc_trace import GPCTrace
-```
+### GPCTrace
 
 Represents a single GPC trace with methods for molecular weight analysis.
 
-### Attributes
+```python
+from polychemtools.analysis import GPCTrace
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `retention_times` | `np.ndarray` | 1D array of retention times |
-| `intensities` | `np.ndarray` | 1D array of measured intensities |
-| `molecular_weights` | `np.ndarray` or `None` | 1D array of molecular weights (if calibrated) |
+# Create from file (recommended)
+traces = GPCTrace.from_file(
+    'tosoh',
+    'path/to/gpc_data.txt',
+    calibration='calibrations.json:my_calibration'
+)
 
-### Class Constants
+# Or create manually
+trace = GPCTrace(gpc.retention_times, gpc.intensities[:, 0], calibration)
+```
 
-| Constant | Default | Description |
-|----------|---------|-------------|
-| `PEAK_HEIGHT_THRESHOLD` | 0 | Minimum peak height for detection |
-| `PEAK_PROMINENCE` | 0.2 | Minimum prominence (0-1 scale) |
-| `PEAK_WIDTH` | 5 | Minimum peak width in data points |
-| `MINIMUM_POLYMER_MW` | 500 | Minimum MW for valid polymer peaks |
-| `BASELINE_THRESHOLD` | 0.99 | Relative height for peak bounds |
+### Calibrations
 
-### Supported Calibration Types
+Calibrations convert retention time to molecular weight. They can be specified two ways:
 
-- `'linear'` - Linear calibration: `10^(a*x + b)`
-- `'cubic'` - Cubic calibration: `10^(a*x³ + b*x² + c*x + d)`
+**Dictionary format:**
+```python
+calibration = {
+    'type': 'cubic',
+    'params': [-0.001701334, 0.064349247, -1.197289570, 14.035147838]
+}
+```
 
-### Constructor
+**JSON file reference:**
+```python
+calibration = 'calibrations.json:sample_calibration'
+```
+
+The JSON file should contain named calibrations:
+```json
+{
+  "sample_calibration": {
+    "type": "cubic",
+    "params": [-0.001701334, 0.064349247, -1.197289570, 14.035147838]
+  },
+}
+```
+
+**Calibration types:**
+- `linear`: MW = 10^(a*RT + b) where params = [a, b]
+- `cubic`: MW = 10^(a*RT^3 + b*RT^2 + c*RT + d) where params = [a, b, c, d]
+
+### Class Methods
+
+#### from_file
+
+Create GPCTrace objects from a data file.
 
 ```python
-GPCTrace(
-    retention_times: np.ndarray,
-    intensities: np.ndarray,
-    calibration: dict | str | None = None
+traces = GPCTrace.from_file(
+    instrument='tosoh',
+    file_path='data.txt',
+    calibration='calibrations.json:my_cal',
+    bounds=(1000, 100000),  # Optional MW bounds
+    correction='span'       # Optional baseline correction
 )
 ```
 
 **Parameters:**
-- `retention_times` - 1D array of retention times
-- `intensities` - 1D array of intensities
-- `calibration` - Calibration data (dict, filepath string, or None)
+- `instrument` (str): Instrument type (e.g., 'tosoh')
+- `file_path` (str): Path to GPC data file
+- `calibration` (dict, str, or None): Calibration parameters
+- `bounds` (tuple, optional): Molecular weight bounds to restrict the trace
+- `correction` (str, optional): Baseline correction method ('span' or None)
 
-**Raises:**
-- `ValueError` - If arrays have mismatched lengths
-- `ValueError` - If retention times are not monotonically increasing
+**Returns:** Tuple of GPCTrace objects, one for each trace in the file
 
-### Class Methods
+### Instance Attributes
 
-#### `from_file`
-
-```python
-@classmethod
-def from_file(
-    cls,
-    instrument: str,
-    file_path: str,
-    calibration: dict | str | None = None,
-    bounds: Tuple[float, float] | None = None,
-    correction: str | None = None
-) -> Tuple[GPCTrace, ...]
-```
-
-Create GPCTrace objects from a data file.
-
-**Parameters:**
-- `instrument` - Instrument type (`'tosoh'`)
-- `file_path` - Path to GPC data file
-- `calibration` - Calibration data or filepath string
-- `bounds` - Optional molecular weight bounds to restrict traces
-- `correction` - Baseline correction method (`'span'` or None)
-
-**Returns:** Tuple of GPCTrace objects
-
-**Example:**
-```python
-# Using dict calibration
-cal = {'type': 'cubic', 'params': [-0.0017, 0.064, -1.197, 14.035]}
-traces = GPCTrace.from_file('tosoh', 'data.txt', cal)
-
-# Using filepath string
-traces = GPCTrace.from_file('tosoh', 'data.txt',
-                            'calibrations.json:sample_calibration')
-
-# With bounds and baseline correction
-traces = GPCTrace.from_file('tosoh', 'data.txt', cal,
-                            bounds=(1000, 100000), correction='span')
-```
+- `retention_times` (np.ndarray): 1D array of retention times
+- `intensities` (np.ndarray): 1D array of measured intensities
+- `molecular_weights` (np.ndarray or None): 1D array of molecular weights (if calibrated)
+- `has_calibration` (bool): True if calibration data is available
 
 ### Molecular Weight Methods
 
-#### `number_average_molecular_weight`
+All molecular weight methods require a calibration and take `bounds` as a tuple of (min_MW, max_MW).
+
+#### number_average_molecular_weight
+
+Calculate number-average molecular weight (Mn).
 
 ```python
-def number_average_molecular_weight(self, bounds: Tuple[float, float]) -> float
+bounds = (1000, 50000)
+mn = trace.number_average_molecular_weight(bounds)
+print(f"Mn: {mn:.1f} g/mol")
 ```
 
-Calculate the number average molecular weight (Mn).
+#### weight_average_molecular_weight
 
-**Parameters:**
-- `bounds` - (min_MW, max_MW) tuple for integration range
-
-**Returns:** Number average molecular weight
-
-**Raises:**
-- `MissingCalibrationError` - If no calibration provided
-- `ValueError` - If no signal in specified bounds
-
-#### `weight_average_molecular_weight`
+Calculate weight-average molecular weight (Mw).
 
 ```python
-def weight_average_molecular_weight(self, bounds: Tuple[float, float]) -> float
+mw = trace.weight_average_molecular_weight(bounds)
+print(f"Mw: {mw:.1f} g/mol")
 ```
 
-Calculate the weight average molecular weight (Mw).
+#### dispersity
 
-**Parameters:**
-- `bounds` - (min_MW, max_MW) tuple for integration range
-
-**Returns:** Weight average molecular weight
-
-**Raises:**
-- `MissingCalibrationError` - If no calibration provided
-- `ValueError` - If no signal in specified bounds
-
-#### `dispersity`
+Calculate dispersity (D = Mw/Mn).
 
 ```python
-def dispersity(self, bounds: Tuple[float, float]) -> float
+d = trace.dispersity(bounds)
+print(f"D: {d:.2f}")
 ```
 
-Calculate the dispersity (Mw/Mn).
+### Peak Detection Methods
 
-**Parameters:**
-- `bounds` - (min_MW, max_MW) tuple for integration range
+#### peak_finder
 
-**Returns:** Dispersity value
-
-#### `moment`
+Find peaks in the GPC trace automatically.
 
 ```python
-def moment(self, n: int, bounds: Tuple[float, float]) -> float
+peaks, heights, left_bounds, right_bounds = trace.peak_finder()
+
+# peaks: Molecular weights at peak positions
+# heights: Peak heights
+# left_bounds: MW at left edge of each peak
+# right_bounds: MW at right edge of each peak
 ```
 
-Calculate the nth moment of the molecular weight distribution.
+#### analyze_peaks
 
-**Parameters:**
-- `n` - Moment order (0, 1, 2, etc.)
-- `bounds` - (min_MW, max_MW) tuple for integration range
-
-**Returns:** The nth moment value
-
-### Peak Analysis Methods
-
-#### `peak_finder`
+Detect peaks and calculate molecular weight statistics for each.
 
 ```python
-def peak_finder(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
-```
-
-Find peaks and their bounds in the GPC trace.
-
-**Returns:** Tuple of (peak_mw, peak_heights, left_bounds, right_bounds)
-
-**Raises:**
-- `MissingCalibrationError` - If no calibration provided
-- `NoPeakError` - If no valid peaks found
-
-#### `peaks` (property)
-
-```python
-@property
-def peaks(self) -> np.ndarray
-```
-
-Get molecular weights of detected peaks.
-
-**Returns:** Array of peak molecular weights
-
-#### `analyze_peaks`
-
-```python
-def analyze_peaks(self) -> PolymerSample
-```
-
-Analyze all peaks and return polymer properties.
-
-**Returns:** `PolymerSample` containing `Polymer` objects for each peak
-
-**Example:**
-```python
-trace = GPCTrace.from_file('tosoh', 'data.txt', calibration)[0]
 sample = trace.analyze_peaks()
 print(sample)
 # PolymerSample(2 polymers):
-#   Peak 1: Mn: 15000 g/mol; Mw: 18000 g/mol; D: 1.20
-#   Peak 2: Mn: 45000 g/mol; Mw: 52000 g/mol; D: 1.16
+#   Peak 1: Mn: 15234 g/mol; Mw: 23451 g/mol; D: 1.54
+#   Peak 2: Mn: 45123 g/mol; Mw: 67890 g/mol; D: 1.50
+
+# Access individual polymers
+for polymer in sample.polymers:
+    print(f"Mn={polymer.mn:.0f}, Mw={polymer.mw:.0f}, D={polymer.dispersity:.2f}")
 ```
 
-#### `tight_bounds` (property)
+### Other Methods
+
+#### peak_area
+
+Integrate signal over a range.
 
 ```python
-@property
-def tight_bounds(self) -> Tuple[float, float]
+# Using retention time bounds
+area = trace.peak_area((12.0, 15.0), mw=False)
+
+# Using molecular weight bounds
+area = trace.peak_area((5000, 50000), mw=True)
 ```
 
-Get bounds that encompass all detected peaks.
+#### restrict_molecular_weights
 
-**Returns:** (min_bound, max_bound) tuple
-
-### Trace Manipulation Methods
-
-#### `restrict_molecular_weights`
+Create a new GPCTrace restricted to a molecular weight range.
 
 ```python
-def restrict_molecular_weights(self, bounds: Tuple[float, float]) -> GPCTrace
+restricted = trace.restrict_molecular_weights((1000, 100000))
 ```
 
-Create a new trace restricted to a molecular weight range.
+#### restrict_retention_times
 
-**Parameters:**
-- `bounds` - (min_MW, max_MW) tuple
-
-**Returns:** New GPCTrace with restricted range
-
-#### `restrict_retention_times`
+Create a new GPCTrace restricted to a retention time range.
 
 ```python
-def restrict_retention_times(self, bounds: Tuple[float, float]) -> GPCTrace
+restricted = trace.restrict_retention_times((10.0, 20.0))
 ```
 
-Create a new trace restricted to a retention time range.
+#### correct_baseline
 
-**Parameters:**
-- `bounds` - (min_RT, max_RT) tuple
-
-**Returns:** New GPCTrace with restricted range
-
-#### `correct_baseline`
+Apply baseline correction to the intensities.
 
 ```python
-def correct_baseline(self, correction: str | None) -> None
+trace.correct_baseline('span')  # Linear baseline from endpoints
 ```
 
-Apply baseline correction to intensities (modifies in place).
+#### get_normalized_intensities
 
-**Parameters:**
-- `correction` - Correction method (`'span'` for linear baseline, or None)
-
-#### `get_normalized_intensities`
+Get intensities normalized to a maximum of 1.
 
 ```python
-def get_normalized_intensities(self) -> np.ndarray
+normalized = trace.get_normalized_intensities()
 ```
 
-Get intensities normalized to maximum = 1.
+#### deconvolute
 
-**Returns:** Normalized intensity array
-
-#### `get_mole_fractions`
+Deconvolute a region into log-normal distributions.
 
 ```python
-def get_mole_fractions(self) -> np.ndarray
-```
-
-Get the mole fraction distribution.
-
-**Returns:** Mole fraction array
-
-### Deconvolution
-
-#### `deconvolute`
-
-```python
-def deconvolute(
-    self,
-    parts: int,
-    bounds: Tuple[float, float]
-) -> List[LogNormal]
-```
-
-Deconvolute trace into log-normal Gaussian components.
-
-**Parameters:**
-- `parts` - Number of Gaussians to fit
-- `bounds` - (min_MW, max_MW) range for fitting
-
-**Returns:** List of fitted `LogNormal` objects
-
-**Example:**
-```python
-trace = GPCTrace.from_file('tosoh', 'data.txt', calibration)[0]
-gaussians = trace.deconvolute(2, (1000, 500000))
+gaussians = trace.deconvolute(parts=2, bounds=(5000, 100000))
 for g in gaussians:
-    print(f"Mn: {g.mn:.0f}, Mw: {g.mw:.0f}, D: {g.dispersity:.2f}")
+    print(f"Mn={g.mn:.0f}, Mw={g.mw:.0f}, D={g.dispersity:.2f}")
 ```
 
-### Utility Methods
+## DSC Analysis
 
-#### `input_calibration`
-
-```python
-def input_calibration(self, calibration: dict) -> None
-```
-
-Apply calibration to calculate molecular weights.
-
-**Parameters:**
-- `calibration` - Dict with `'type'` and `'params'` keys
-
-#### `has_calibration` (property)
-
-```python
-@property
-def has_calibration(self) -> bool
-```
-
-Check if calibration data exists.
-
-#### `retention_time_index`
-
-```python
-def retention_time_index(self, retention_time: float) -> int
-```
-
-Find the index for a given retention time.
-
-#### `molecular_weight_index`
-
-```python
-def molecular_weight_index(self, molecular_weight: float) -> int
-```
-
-Find the index for a given molecular weight.
-
-#### `peak_area`
-
-```python
-def peak_area(self, bounds: Tuple[float, float]) -> float
-```
-
-Calculate peak area within retention time bounds.
-
----
-
-## Polymer
-
-```python
-from polychemtools.analysis.gpc_trace import Polymer
-```
-
-Dataclass representing a single polymer and its properties.
-
-### Attributes
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `mn` | `float` | Number average molecular weight |
-| `mw` | `float` | Weight average molecular weight |
-| `dispersity` | `float` | Dispersity (Mw/Mn) |
-
----
-
-## PolymerSample
-
-```python
-from polychemtools.analysis.gpc_trace import PolymerSample
-```
-
-Dataclass representing a sample containing multiple polymers.
-
-### Attributes
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `polymers` | `List[Polymer]` | List of Polymer objects |
-
----
-
-## DSCTrace
-
-```python
-from polychemtools.analysis.dsc_trace import DSCTrace
-```
+### DSCTrace
 
 Represents a single DSC ramp with methods for thermal analysis.
 
-### Attributes
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `temperatures` | `np.ndarray` | 1D array of temperatures (°C) |
-| `heat_flows` | `np.ndarray` | 1D array of heat flows (W/g) |
-
-### Constructor
-
 ```python
-DSCTrace(temperatures: np.ndarray, heat_flows: np.ndarray)
+from polychemtools.analysis import DSCTrace
+
+# Create from file (recommended)
+trace = DSCTrace.from_file(
+    'trios',
+    'experiment.csv',
+    ramp_index=-1,  # Last ramp (typically second heating)
+    reverse=True    # Reverse for ascending temperature
+)
+
+# Or create manually
+trace = DSCTrace(temperatures, heat_flows)
 ```
-
-**Parameters:**
-- `temperatures` - 1D array of temperature values
-- `heat_flows` - 1D array of heat flow values
-
-**Raises:**
-- `ValueError` - If arrays have different lengths or invalid dimensions
-
-**Note:** If temperature data is not monotonically increasing, it will be automatically sorted with a warning logged.
 
 ### Class Methods
 
-#### `from_file`
-
-```python
-@classmethod
-def from_file(
-    cls,
-    instrument: str,
-    file_path: str,
-    ramp_index: int = -1,
-    reverse: bool = True
-) -> DSCTrace
-```
+#### from_file
 
 Create a DSCTrace from a data file.
 
-**Parameters:**
-- `instrument` - DSC instrument type (`'trios'`)
-- `file_path` - Path to DSC data file
-- `ramp_index` - Index of ramp to extract (default: -1, last ramp)
-- `reverse` - If True, reverse data (default: True)
-
-**Returns:** DSCTrace object
-
-**Example:**
 ```python
-# Get second heating curve (last ramp, reversed)
-trace = DSCTrace.from_file('trios', 'experiment.csv')
-
-# Get first heating curve
-trace = DSCTrace.from_file('trios', 'experiment.csv', ramp_index=0, reverse=False)
+trace = DSCTrace.from_file(
+    instrument='trios',
+    file_path='experiment.csv',
+    ramp_index=-1,
+    reverse=True
+)
 ```
+
+**Parameters:**
+- `instrument` (str): DSC instrument type (e.g., 'trios')
+- `file_path` (str): Path to the DSC data file
+- `ramp_index` (int): Index of ramp to extract (default: -1, last ramp)
+- `reverse` (bool): If True, reverse data for ascending temperature (default: True)
+
+### Instance Attributes
+
+- `temperatures` (np.ndarray): 1D array of temperature values (degrees C)
+- `heat_flows` (np.ndarray): 1D array of heat flow values (W/g)
 
 ### Methods
 
-#### `measure_slope`
+#### measure_slope
+
+Measure the slope (baseline) in a temperature range.
 
 ```python
-def measure_slope(
-    self,
-    temperature_range: Tuple[float, float],
-    return_fit_data: bool = False
-) -> float | Tuple[float, float, np.ndarray, np.ndarray]
-```
-
-Measure baseline slope in a temperature range.
-
-**Parameters:**
-- `temperature_range` - (min_temp, max_temp) for slope measurement
-- `return_fit_data` - If True, return additional fit data
-
-**Returns:**
-- If `return_fit_data=False`: slope (W/g/°C)
-- If `return_fit_data=True`: (slope, intercept, fit_temps, fit_flows)
-
-**Raises:**
-- `ValueError` - If range is invalid or contains no data
-
-**Example:**
-```python
-trace = DSCTrace.from_file('trios', 'experiment.csv')
-
 # Simple slope measurement
 slope = trace.measure_slope((55, 60))
+print(f'Baseline slope: {slope:.4f} W/g/C')
 
-# With fit data for plotting
-slope, intercept, temps, flows = trace.measure_slope((55, 60), return_fit_data=True)
+# Get full fit data for plotting
+slope, intercept, fit_temps, fit_flows = trace.measure_slope(
+    (55, 60),
+    return_fit_data=True
+)
 ```
 
-#### `normalize_to_baseline`
+**Parameters:**
+- `temperature_range` (tuple): (min_temp, max_temp) in degrees C
+- `return_fit_data` (bool): If True, return additional fit parameters
 
-```python
-def normalize_to_baseline(self, baseline_value: float | None = None) -> np.ndarray
-```
+**Returns:**
+- If `return_fit_data=False`: slope (float)
+- If `return_fit_data=True`: (slope, intercept, fit_temps, fit_flows)
+
+#### normalize_to_baseline
 
 Normalize heat flows by subtracting a baseline value.
 
-**Parameters:**
-- `baseline_value` - Value to subtract (default: last heat flow value)
-
-**Returns:** Normalized heat flow array
-
-#### `get_temperature_index`
-
 ```python
-def get_temperature_index(self, temperature: float) -> int
+# Normalize to endpoint (common DSC normalization)
+normalized = trace.normalize_to_baseline()
+
+# Normalize to specific value
+normalized = trace.normalize_to_baseline(baseline_value=0.5)
 ```
+
+**Parameters:**
+- `baseline_value` (float, optional): Value to subtract. If None, uses the last value.
+
+**Returns:** Normalized heat flow values as numpy array
+
+#### get_temperature_index
 
 Find the index closest to a given temperature.
 
----
+```python
+idx = trace.get_temperature_index(65.0)
+```
 
 ## Exceptions
 
-### MissingCalibrationError
+- `MissingCalibrationError`: Raised when MW operations are attempted without calibration
+- `NoPeakError`: Raised when peak analysis finds no valid peaks
+
+## Utilities
+
+### load_calibration
+
+Load a calibration from a JSON file.
 
 ```python
-from polychemtools.analysis.gpc_trace import MissingCalibrationError
+from polychemtools.utils import load_calibration
+
+calibration = load_calibration('calibrations.json', 'sample_calibration')
 ```
 
-Raised when operations requiring calibration are called without calibration data.
+### LogNormal
 
-### NoPeakError
+Log-normal distribution utility for peak deconvolution.
 
 ```python
-from polychemtools.analysis.gpc_trace import NoPeakError
-```
+from polychemtools.utils import LogNormal
 
-Raised when no valid peaks are found in a GPC trace.
+ln = LogNormal(sigma=0.3, mu=10.0, scale=1.0)
+print(f"Mn: {ln.mn:.0f}, Mw: {ln.mw:.0f}, D: {ln.dispersity:.2f}")
+```

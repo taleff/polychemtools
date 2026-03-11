@@ -1,276 +1,153 @@
 # Processing Module
 
-The processing module provides data parsers for various analytical instruments. Each processor handles instrument-specific file formats and extracts the relevant data.
+The processing module extracts raw data from instrument files. Each class handles a specific instrument type and provides access to the underlying data arrays.
 
-## Module: `polychemtools.processing`
+## Gas Chromatography (GC)
 
----
+### GCData
 
-## GPCData
-
-```python
-from polychemtools.processing.gpc_data_processor import GPCData
-```
-
-Gel permeation chromatography data parser from instrumental data.
-
-### Attributes
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `retention_times` | `np.ndarray` | 1D array of retention times |
-| `intensities` | `np.ndarray` | 2D array of intensities (columns = traces) |
-
-### Supported Instruments
-
-- `'tosoh'` - Tosoh GPC system (whitespace-delimited text files)
-
-### Constructor
+Parse and extract data from Shimadzu GC data files.
 
 ```python
-GPCData(retention_times: np.ndarray, intensities: np.ndarray)
+from polychemtools.processing import GCData
+
+gc = GCData('shimadzu', 'path/to/gc_data.TXT')
 ```
 
 **Parameters:**
-- `retention_times` - 1D array of retention times
-- `intensities` - 2D array of intensities (columns = different traces)
+- `instrument` (str): Instrument type. Supported: `'shimadzu'`
+- `file_path` (str): Path to the GC data file
 
-### Class Methods
-
-#### `from_file`
-
-```python
-@classmethod
-def from_file(cls, instrument: str, file_path: str) -> GPCData
-```
-
-Create GPCData from an instrument data file.
-
-**Parameters:**
-- `instrument` - Instrument type (`'tosoh'`)
-- `file_path` - Path to the GPC data file
-
-**Returns:** `GPCData` instance
-
-**Raises:**
-- `UnsupportedInstrumentError` - If instrument type is not supported
-- `ValueError` - If file format is invalid
-
-**Example:**
-```python
-gpc_data = GPCData.from_file('tosoh', 'data.txt')
-print(f"Number of traces: {len(gpc_data)}")
-```
+**Attributes:**
+- `peak_retention_times` (np.ndarray): 1D array of retention times for detected peaks
+- `peak_areas` (np.ndarray): 1D array of areas for detected peaks
+- `chromatogram_times` (np.ndarray): 1D array of retention times for the full chromatogram
+- `chromatogram_intensities` (np.ndarray): 1D array of intensities for the full chromatogram
 
 ### Methods
 
-#### `__len__`
-
-```python
-def __len__(self) -> int
-```
-
-Returns the number of GPC traces in the data.
-
----
-
-## GCData
-
-```python
-from polychemtools.processing.gc_data_processor import GCData
-```
-
-Gas chromatography data parser with instrument-specific parsing.
-
-### Attributes
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `instrument` | `str` | The GC instrument type |
-| `peak_retention_times` | `np.ndarray` | 1D array of peak retention times |
-| `peak_areas` | `np.ndarray` | 1D array of peak areas |
-| `chromatogram_times` | `np.ndarray` | 1D array of chromatogram retention times |
-| `chromatogram_intensities` | `np.ndarray` | 1D array of chromatogram intensities |
-
-### Supported Instruments
-
-- `'shimadzu'` - Shimadzu GC system (tab-delimited text files)
-
-### Constructor
-
-```python
-GCData(instrument: str, file_path: str)
-```
-
-**Parameters:**
-- `instrument` - GC instrument type (`'shimadzu'`)
-- `file_path` - Path to the GC data file
-
-**Raises:**
-- `UnsupportedInstrumentError` - If instrument type is not supported
-- `FileNotFoundError` - If file does not exist
-
-### Methods
-
-#### `get_peak_areas`
-
-```python
-def get_peak_areas(
-    self,
-    retention_times: List[float],
-    tolerance: float = 0.10
-) -> List[Optional[float]]
-```
+#### get_peak_areas
 
 Extract peak areas at specified retention times.
 
-**Parameters:**
-- `retention_times` - List of target retention times (minutes)
-- `tolerance` - Matching tolerance (±tolerance minutes, default: 0.10)
-
-**Returns:** List of peak areas (None if no peak found at that RT)
-
-**Raises:**
-- `MultiplePeaksFoundError` - If multiple peaks found within tolerance
-
-**Example:**
 ```python
-gc = GCData('shimadzu', 'gc_data.txt')
-areas = gc.get_peak_areas([5.2, 8.7, 12.3], tolerance=0.05)
-for rt, area in zip([5.2, 8.7, 12.3], areas):
-    if area:
-        print(f"RT {rt}: Area = {area}")
-    else:
-        print(f"RT {rt}: No peak found")
-```
+# Single peak
+areas = gc.get_peak_areas([3.521], tolerance=0.10)
 
-#### `get_chromatogram`
-
-```python
-def get_chromatogram(
-    self,
-    time_range: Optional[tuple[float, float]] = None
-) -> tuple[np.ndarray, np.ndarray]
-```
-
-Extract chromatogram data.
-
-**Parameters:**
-- `time_range` - Optional (min_time, max_time) tuple to filter data
-
-**Returns:** Tuple of (retention_times, intensities) arrays
-
-**Raises:**
-- `ValueError` - If time_range is invalid
-
-**Example:**
-```python
-gc = GCData('shimadzu', 'gc_data.txt')
-
-# Get full chromatogram
-times, intensities = gc.get_chromatogram()
-
-# Get specific time range
-times, intensities = gc.get_chromatogram(time_range=(5.0, 15.0))
-```
-
----
-
-## DSCData
-
-```python
-from polychemtools.processing.dsc_data_processor import DSCData
-```
-
-Differential scanning calorimetry data parser.
-
-### Attributes
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `instrument` | `str` | DSC instrument type |
-| `file_path` | `str` | Path to data file |
-| `temperatures` | `np.ndarray` | 1D array of temperatures (°C) |
-| `heat_flows` | `np.ndarray` | 1D array of heat flows (W/g) |
-| `ramp_indices` | `np.ndarray` | Indices where ramps start |
-
-### Supported Instruments
-
-- `'trios'` - TA Instruments Trios software (CSV files)
-
-### Constructor
-
-```python
-DSCData(instrument: str, file_path: str)
+# Multiple peaks
+retention_times = [3.521, 4.234, 5.891]
+areas = gc.get_peak_areas(retention_times, tolerance=0.10)
 ```
 
 **Parameters:**
-- `instrument` - DSC instrument type (`'trios'`)
-- `file_path` - Path to DSC CSV file
+- `retention_times` (List[float]): Target retention times in minutes
+- `tolerance` (float): Search window around each retention time (default: 0.10 minutes)
+
+**Returns:** List of peak areas. Returns `None` for retention times where no peak was found.
 
 **Raises:**
-- `UnsupportedInstrumentError` - If instrument type is not supported
-- `FileNotFoundError` - If file does not exist
-- `ValueError` - If file format is invalid
+- `MultiplePeaksFoundError`: If multiple peaks found within tolerance window
+
+#### get_chromatogram
+
+Extract chromatogram data, optionally filtered to a time range.
+
+```python
+# Get complete chromatogram
+rt, intensity = gc.get_chromatogram()
+
+# Get chromatogram in specific time range
+rt, intensity = gc.get_chromatogram(time_range=(2.0, 8.0))
+```
+
+**Parameters:**
+- `time_range` (tuple, optional): Tuple of (min_time, max_time) in minutes
+
+**Returns:** Tuple of (retention_times, intensities) as numpy arrays
+
+## Gel Permeation Chromatography (GPC)
+
+### GPCData
+
+Parse GPC data from Tosoh instrument files.
+
+```python
+from polychemtools.processing import GPCData
+
+# Load from file using class method
+gpc = GPCData.from_file('tosoh', 'path/to/gpc_data.txt')
+
+# Access data
+retention_times = gpc.retention_times
+intensities = gpc.intensities  # 2D array, each column is a trace
+num_traces = len(gpc)
+```
+
+**Class Methods:**
+- `from_file(instrument, file_path)`: Load GPC data from file
+
+**Parameters:**
+- `instrument` (str): Instrument type. Supported: `'tosoh'`
+- `file_path` (str): Path to the GPC data file
+
+**Attributes:**
+- `retention_times` (np.ndarray): 1D array of retention times
+- `intensities` (np.ndarray): 2D array where each column is a trace
+
+**Methods:**
+- `__len__()`: Returns number of traces in file
+
+## Differential Scanning Calorimetry (DSC)
+
+### DSCData
+
+Parse DSC data from TA Instruments Trios CSV files.
+
+```python
+from polychemtools.processing import DSCData
+
+dsc = DSCData('trios', 'path/to/experiment.csv')
+
+# Get information about the data
+print(f'Number of ramps: {len(dsc)}')
+print(f'Total data points: {len(dsc.temperatures)}')
+```
+
+**Parameters:**
+- `instrument` (str): Instrument type. Supported: `'trios'`
+- `file_path` (str): Path to the DSC CSV file
+
+**Attributes:**
+- `temperatures` (np.ndarray): 1D array of temperature values (degrees C)
+- `heat_flows` (np.ndarray): 1D array of heat flow values (W/g)
+- `ramp_indices` (np.ndarray): Array of indices where heating/cooling ramps start
 
 ### Methods
 
-#### `get_ramp_data`
+#### get_ramp_data
+
+Extract temperature and heat flow data for a specific ramp.
 
 ```python
-def get_ramp_data(
-    self,
-    ramp_index: int,
-    reverse: bool = False
-) -> Tuple[np.ndarray, np.ndarray]
-```
-
-Get temperature and heat flow data for a specific ramp.
-
-**Parameters:**
-- `ramp_index` - Index of ramp (0-based, negative indices supported)
-- `reverse` - If True, reverse the data arrays
-
-**Returns:** Tuple of (temperatures, heat_flows) arrays
-
-**Raises:**
-- `IndexError` - If ramp_index is out of range
-
-**Example:**
-```python
-dsc = DSCData('trios', 'experiment.csv')
-
-# Get last ramp (typically second heating), reversed for analysis
-temps, flows = dsc.get_ramp_data(-1, reverse=True)
+# Get second heating curve (last ramp, reversed for ascending temperature)
+temps, flows = dsc.get_ramp_data(ramp_index=-1, reverse=True)
 
 # Get first heating curve
-temps, flows = dsc.get_ramp_data(0)
+temps, flows = dsc.get_ramp_data(ramp_index=0, reverse=False)
+
+# Get cooling curve (typically second ramp)
+temps, flows = dsc.get_ramp_data(ramp_index=1)
 ```
 
-#### `__len__`
+**Parameters:**
+- `ramp_index` (int): Index of the ramp to extract. Negative indices count from end.
+- `reverse` (bool): If True, reverse the data arrays (useful for analysis)
 
-```python
-def __len__(self) -> int
-```
-
-Returns the number of ramps in the DSC data.
-
----
+**Returns:** Tuple of (temperatures, heat_flows) as numpy arrays
 
 ## Exceptions
 
-### UnsupportedInstrumentError
+The processing module defines the following exceptions:
 
-```python
-from polychemtools.processing.data_processor import UnsupportedInstrumentError
-```
-
-Raised when an unsupported instrument type is specified.
-
-### MultiplePeaksFoundError
-
-```python
-from polychemtools.processing.gc_data_processor import MultiplePeaksFoundError
-```
-
-Raised when multiple peaks are found within the specified tolerance for GC peak matching.
+- `UnsupportedInstrumentError`: Raised when an unsupported instrument type is specified
+- `MultiplePeaksFoundError`: Raised when multiple peaks are found within the tolerance window (GC only)

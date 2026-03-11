@@ -1,480 +1,340 @@
 # Visualization Module
 
-The visualization module provides matplotlib-based classes for creating publication-quality plots of chromatography and calorimetry data.
+The visualization module provides classes for creating publication-ready plots from experimental data. All graph classes inherit from `BaseGraph` and share common methods for setting bounds and saving figures.
 
-## Module: `polychemtools.visualization`
+## Common Methods
 
----
-
-## BaseGraph (Abstract)
+All graph classes support these methods:
 
 ```python
-from polychemtools.visualization.base_graph import BaseGraph
+# Set axis bounds
+graph.set_xbounds((min, max))
+graph.set_ybounds((min, max))
+
+# Save the figure
+graph.save_graph('output.png')
 ```
-
-Abstract base class for all graph types. Provides common functionality for creating, configuring, and saving matplotlib graphs.
-
-### Attributes
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `x_values` | `np.ndarray` | Independent variable data |
-| `y_values` | `np.ndarray` | Dependent variable data |
-| `xtitle` | `str` | X-axis label |
-| `ytitle` | `str` | Y-axis label |
-| `xbounds` | `tuple` or `None` | X-axis limits |
-| `ybounds` | `tuple` or `None` | Y-axis limits |
-| `stylesheet` | `str` | Path to matplotlib stylesheet |
-
-### Color Schemes
-
-| Scheme | Description |
-|--------|-------------|
-| `'viridis'` | Matplotlib viridis colormap |
-| `'black'` | All traces in black |
-
-### Methods
-
-#### `set_xbounds`
-
-```python
-def set_xbounds(self, xbounds: Tuple[float, float]) -> None
-```
-
-Set x-axis limits.
-
-**Parameters:**
-- `xbounds` - (min, max) tuple
-
-#### `set_ybounds`
-
-```python
-def set_ybounds(self, ybounds: Tuple[float, float]) -> None
-```
-
-Set y-axis limits.
-
-**Parameters:**
-- `ybounds` - (min, max) tuple
-
-#### `save_graph`
-
-```python
-def save_graph(self, filename: str) -> None
-```
-
-Create and save the graph to a file.
-
-**Parameters:**
-- `filename` - Output file path (supports PNG, PDF, SVG, etc.)
-
----
 
 ## TraceGraph
 
-```python
-from polychemtools.visualization.trace_graph import TraceGraph
-```
-
-Line plot visualization for multi-trace experimental data.
-
-### Attributes
-
-Inherits all `BaseGraph` attributes, plus:
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `xscale` | `str` | X-axis scale (`'linear'` or `'log'`) |
-| `legend` | `list` or `None` | Legend labels for traces |
-| `legend_loc` | `str` | Legend location |
-| `colors` | `list` | Colors for each trace |
-
-### Constructor
+Create multi-trace line plots for chromatograms and similar data.
 
 ```python
-TraceGraph(
-    x_values: np.ndarray,
-    y_values: np.ndarray,
-    xtitle: str,
-    ytitle: str,
-    xscale: str = 'linear',
-    legend: list | None = None,
-    legend_loc: str = 'upper left',
-    color_scheme: str = 'black',
-    stylesheet: str | None = None
+from polychemtools.visualization import TraceGraph
+import numpy as np
+
+# Single trace
+graph = TraceGraph(
+    x_values=retention_times,
+    y_values=intensities,
+    xtitle='Retention Time (min)',
+    ytitle='Intensity (mV)'
 )
+graph.save_graph('chromatogram.png')
+
+# Multiple traces
+y_data = np.column_stack([trace1, trace2, trace3])
+graph = TraceGraph(
+    x_values=retention_times,
+    y_values=y_data,
+    xtitle='Retention Time (min)',
+    ytitle='Intensity (mV)',
+    legend=['Sample 1', 'Sample 2', 'Sample 3'],
+    color_scheme='viridis'
+)
+graph.save_graph('comparison.png')
 ```
 
 **Parameters:**
-- `x_values` - 1D array of x-axis values
-- `y_values` - 1D or 2D array of y-axis values (columns = traces)
-- `xtitle` - X-axis label
-- `ytitle` - Y-axis label
-- `xscale` - Axis scale (`'linear'` or `'log'`)
-- `legend` - List of legend labels
-- `legend_loc` - Legend position
-- `color_scheme` - Color scheme (`'viridis'` or `'black'`)
-- `stylesheet` - Path to matplotlib stylesheet
+- `x_values` (np.ndarray): 1D array of x-axis values
+- `y_values` (np.ndarray): 1D or 2D array of y-axis values (columns are traces)
+- `xtitle` (str): X-axis label
+- `ytitle` (str): Y-axis label
+- `xscale` (str): Scale for x-axis: `'linear'` or `'log'` (default: `'linear'`)
+- `legend` (list, optional): List of legend labels for each trace
+- `legend_loc` (str): Legend location (default: `'upper left'`)
+- `color_scheme` (str): Color scheme: `'viridis'` or `'black'` (default: `'black'`)
+- `stylesheet` (str, optional): Path to matplotlib stylesheet file
 
-**Example:**
-```python
-import numpy as np
-from polychemtools.visualization.trace_graph import TraceGraph
-
-x = np.linspace(0, 10, 100)
-y = np.column_stack([np.sin(x), np.cos(x)])
-
-graph = TraceGraph(
-    x, y, 'Time (s)', 'Signal',
-    legend=['sin(x)', 'cos(x)'],
-    color_scheme='viridis'
-)
-graph.save_graph('traces.png')
-```
-
----
+**Color Schemes:**
+- `'black'`: Monochrome (all traces in black)
+- `'viridis'`: 8-color gradient from the viridis colormap
 
 ## GPCTraceGraph
 
-```python
-from polychemtools.visualization.trace_graph import GPCTraceGraph
-```
+GPC-specific plots with automatic normalization and molecular weight support.
 
-Specialized graph for GPC chromatograms with automatic bound calculation and peak visualization.
+### Quick Methods
 
-### Class Constants
+These class methods handle the entire workflow from raw data to saved figure.
 
-| Constant | Default | Description |
-|----------|---------|-------------|
-| `BOUND_EDGE_SCALE` | 5 | Multiplier for extending bounds |
-| `LOWER_BOUND_THRESHOLD` | 0.2 | Threshold for rounding min bound |
-| `UPPER_BOUND_THRESHOLD` | 0.8 | Threshold for rounding max bound |
-| `DEFAULT_Y_MIN` | -0.1 | Default y-axis minimum |
-| `DEFAULT_Y_MAX` | 1.1 | Default y-axis maximum |
+#### mw_graph_from_data
 
-### Class Methods
-
-#### `rt_graph_from_data`
+Create a molecular weight distribution plot from raw GPC data.
 
 ```python
-@classmethod
-def rt_graph_from_data(
-    cls,
-    instrument: str,
-    data_file: str,
-    graph_file: str,
-    legend: list | None = None,
-    set_bounds: tuple | None = None
-) -> None
-```
+from polychemtools.visualization import GPCTraceGraph
 
-Create retention time graph from raw GPC data.
-
-**Parameters:**
-- `instrument` - Instrument type (`'tosoh'`)
-- `data_file` - Path to GPC data file
-- `graph_file` - Output graph path
-- `legend` - Optional legend labels
-- `set_bounds` - Optional (min_RT, max_RT) bounds
-
-**Example:**
-```python
-GPCTraceGraph.rt_graph_from_data(
-    'tosoh', 'data.txt', 'rt_plot.png',
-    legend=['Sample 1', 'Sample 2']
-)
-```
-
-#### `mw_graph_from_data`
-
-```python
-@classmethod
-def mw_graph_from_data(
-    cls,
-    instrument: str,
-    data_file: str,
-    calibration: dict | str,
-    graph_file: str,
-    legend: list | None = None,
-    show_bounds: bool = False,
-    set_bounds: tuple | None = None
-) -> PolymerSample
-```
-
-Create molecular weight graph from raw GPC data.
-
-**Parameters:**
-- `instrument` - Instrument type (`'tosoh'`)
-- `data_file` - Path to GPC data file
-- `calibration` - Calibration dict or filepath string
-- `graph_file` - Output graph path
-- `legend` - Optional legend labels
-- `show_bounds` - If True, show integration bounds on plot
-- `set_bounds` - Optional (min_MW, max_MW) bounds
-
-**Returns:** `PolymerSample` with analyzed peak data
-
-**Example:**
-```python
-# With dict calibration
-cal = {'type': 'cubic', 'params': [-0.0017, 0.064, -1.197, 14.035]}
+# Using JSON calibration (recommended)
 sample = GPCTraceGraph.mw_graph_from_data(
-    'tosoh', 'data.txt', cal, 'mw_plot.png',
-    show_bounds=True
+    instrument='tosoh',
+    data_file='polymer_sample.txt',
+    calibration='calibrations.json:sample_calibration',
+    graph_file='mw_plot.png',
+    show_bounds=True  # Show integration regions
 )
-print(sample)
+print(sample)  # Prints molecular weight statistics
 
-# With filepath calibration
+# Using dict calibration
+calibration = {
+    'type': 'cubic',
+    'params': [-0.001701334, 0.064349247, -1.197289570, 14.035147838]
+}
 sample = GPCTraceGraph.mw_graph_from_data(
-    'tosoh', 'data.txt',
-    'calibrations.json:sample_calibration',
+    'tosoh',
+    'polymer_sample.txt',
+    calibration,
     'mw_plot.png'
 )
 ```
 
-#### `mw_graph_from_trace`
+**Parameters:**
+- `instrument` (str): Instrument type (e.g., 'tosoh')
+- `data_file` (str): Path to GPC data file
+- `calibration` (dict or str): Calibration parameters or JSON reference
+- `graph_file` (str): Output file path
+- `legend` (list, optional): Legend labels
+- `show_bounds` (bool): If True, show integration regions as shaded rectangles
+- `set_bounds` (tuple, optional): Manual MW bounds (min, max)
+
+**Returns:** `PolymerSample` with molecular weight statistics
+
+#### rt_graph_from_data
+
+Create a retention time plot from raw GPC data (no calibration needed).
 
 ```python
-@classmethod
-def mw_graph_from_trace(
-    cls,
-    traces: GPCTrace | Tuple[GPCTrace, ...],
-    graph_file: str,
-    legend: list | None = None,
-    set_bounds: tuple | None = None
-) -> None
+GPCTraceGraph.rt_graph_from_data(
+    instrument='tosoh',
+    data_file='polymer_sample.txt',
+    graph_file='rt_plot.png',
+    legend=['Sample 1'],
+    set_bounds=(10, 25)
+)
 ```
 
-Create molecular weight graph from pre-processed GPCTrace objects.
-
 **Parameters:**
-- `traces` - One or more GPCTrace objects (must have calibration)
-- `graph_file` - Output graph path
-- `legend` - Optional legend labels
-- `set_bounds` - Optional (min_MW, max_MW) bounds
+- `instrument` (str): Instrument type
+- `data_file` (str): Path to GPC data file
+- `graph_file` (str): Output file path
+- `legend` (list, optional): Legend labels
+- `set_bounds` (tuple, optional): Retention time bounds (min, max)
 
-**Raises:**
-- `MissingCalibrationError` - If any trace lacks calibration
+#### mw_graph_from_trace
 
-**Example:**
+Create a molecular weight plot from pre-processed GPCTrace objects.
+
 ```python
+from polychemtools.analysis import GPCTrace
+
 traces = GPCTrace.from_file('tosoh', 'data.txt', calibration)
-GPCTraceGraph.mw_graph_from_trace(traces, 'mw_plot.png')
+GPCTraceGraph.mw_graph_from_trace(
+    traces=traces,
+    graph_file='output.png',
+    legend=['Sample 1', 'Sample 2']
+)
 ```
-
-#### `rt_graph_from_trace`
-
-```python
-@classmethod
-def rt_graph_from_trace(
-    cls,
-    traces: GPCTrace | Tuple[GPCTrace, ...],
-    graph_file: str,
-    legend: list | None = None,
-    set_bounds: tuple | None = None
-) -> None
-```
-
-Create retention time graph from GPCTrace objects.
 
 **Parameters:**
-- `traces` - One or more GPCTrace objects
-- `graph_file` - Output graph path
-- `legend` - Optional legend labels
-- `set_bounds` - Optional (min_RT, max_RT) bounds
+- `traces` (GPCTrace or tuple): One or more GPCTrace objects
+- `graph_file` (str): Output file path
+- `legend` (list, optional): Legend labels
+- `set_bounds` (tuple, optional): MW bounds (min, max)
 
----
+#### rt_graph_from_trace
+
+Create a retention time plot from pre-processed GPCTrace objects.
+
+```python
+GPCTraceGraph.rt_graph_from_trace(
+    traces=traces,
+    graph_file='output.png'
+)
+```
+
+### Manual Construction
+
+For more control, create GPCTraceGraph directly:
+
+```python
+from polychemtools.analysis import GPCTrace
+from polychemtools.visualization import GPCTraceGraph
+
+traces = GPCTrace.from_file('tosoh', 'data.txt', calibration)
+trace = traces[0]
+
+graph = GPCTraceGraph(
+    x_values=trace.molecular_weights,
+    y_values=trace.get_normalized_intensities(),
+    xtitle='Molecular Weight (g/mol)',
+    ytitle='Intensity (A.U.)',
+    xscale='log'
+)
+graph.set_xbounds((1000, 100000))
+graph.set_ybounds((-0.1, 1.1))
+graph.save_graph('mw_distribution.png')
+```
 
 ## KineticsGraph
 
-```python
-from polychemtools.visualization.kinetics_graph import KineticsGraph
-```
-
-Scatter plot visualization for kinetics data.
-
-### Constructor
+Create scatter plots for kinetics data.
 
 ```python
-KineticsGraph(
-    x_values: np.ndarray,
-    y_values: np.ndarray,
-    xtitle: str,
-    ytitle: str,
-    stylesheet: str | None = None
-)
-```
+from polychemtools.visualization import KineticsGraph
 
-**Parameters:**
-- `x_values` - 1D array of x-axis values
-- `y_values` - 1D array of y-axis values
-- `xtitle` - X-axis label
-- `ytitle` - Y-axis label
-- `stylesheet` - Path to matplotlib stylesheet
-
-**Example:**
-```python
-from polychemtools.visualization.kinetics_graph import KineticsGraph
-import numpy as np
-
-time = np.array([0, 30, 60, 120, 240, 480])
-conversion = np.array([0, 15, 28, 45, 68, 85])
+time = [0, 10, 20, 30, 60, 120]
+conversion = [0, 15, 32, 51, 78, 92]
 
 graph = KineticsGraph(
-    time, conversion,
-    'Time (min)', 'Conversion (%)'
+    x_values=time,
+    y_values=conversion,
+    xtitle='Time (min)',
+    ytitle='Conversion (%)'
 )
-graph.set_xbounds((0, 500))
-graph.set_ybounds((0, 100))
 graph.save_graph('kinetics.png')
 ```
 
----
+**Parameters:**
+- `x_values` (array-like): X-axis values
+- `y_values` (array-like): Y-axis values
+- `xtitle` (str): X-axis label
+- `ytitle` (str): Y-axis label
+- `color_scheme` (str): Color scheme (default: `'black'`)
+- `stylesheet` (str, optional): Path to matplotlib stylesheet
 
 ## DSCTraceGraph
 
-```python
-from polychemtools.visualization.dsc_trace_graph import DSCTraceGraph
-```
+DSC-specific plots for thermal analysis data.
 
-Specialized graph for DSC heating/cooling curves.
+### Quick Methods
 
-### Class Constants
+#### from_file
 
-| Constant | Default | Description |
-|----------|---------|-------------|
-| `DEFAULT_RAMP_LABELS` | `['First Heating', 'Cooling', 'Second Heating']` | Default legend labels |
-
-### Constructor
+Create a plot of all heating/cooling ramps from a DSC file.
 
 ```python
-DSCTraceGraph(
-    x_values: np.ndarray,
-    y_values: np.ndarray,
-    xtitle: str = 'Temperature (°C)',
-    ytitle: str = 'Heat Flow (W/g)',
-    legend: list | None = None,
-    legend_loc: str = 'upper left',
-    color_scheme: str = 'viridis',
-    stylesheet: str | None = None
-)
-```
+from polychemtools.visualization import DSCTraceGraph
 
-**Parameters:**
-- `x_values` - 1D array of temperatures
-- `y_values` - 2D array of heat flows (columns = ramps)
-- `xtitle` - X-axis label (default: 'Temperature (°C)')
-- `ytitle` - Y-axis label (default: 'Heat Flow (W/g)')
-- `legend` - Legend labels (default: auto-generated)
-- `legend_loc` - Legend position
-- `color_scheme` - Color scheme
-- `stylesheet` - Path to matplotlib stylesheet
-
-### Class Methods
-
-#### `from_file`
-
-```python
-@classmethod
-def from_file(
-    cls,
-    instrument: str,
-    file_path: str,
-    graph_file: str,
-    ramp_indices: list | None = None,
-    legend: list | None = None,
-    color_scheme: str = 'viridis',
-    xlim: tuple | None = None,
-    ylim: tuple | None = None
-) -> DSCTraceGraph
-```
-
-Create and save a DSC plot from a data file.
-
-**Parameters:**
-- `instrument` - DSC instrument type (`'trios'`)
-- `file_path` - Path to DSC data file
-- `graph_file` - Output graph path
-- `ramp_indices` - Indices of ramps to plot (default: all)
-- `legend` - Legend labels
-- `color_scheme` - Color scheme
-- `xlim` - X-axis limits
-- `ylim` - Y-axis limits
-
-**Returns:** DSCTraceGraph object
-
-**Example:**
-```python
-# Plot all ramps
-graph = DSCTraceGraph.from_file('trios', 'dsc.csv', 'dsc_plot.png')
-
-# Plot only second heating
 graph = DSCTraceGraph.from_file(
-    'trios', 'dsc.csv', 'dsc_plot.png',
-    ramp_indices=[-1],
-    legend=['Second Heating']
+    instrument='trios',
+    file_path='experiment.csv',
+    graph_file='dsc_plot.png',
+    color_scheme='viridis',
+    xlim=(30, 90),
+    ylim=(-0.5, 1.0)
 )
 ```
 
-#### `create_stacked_plot`
-
-```python
-@classmethod
-def create_stacked_plot(
-    cls,
-    instrument: str,
-    file_paths: list,
-    graph_file: str,
-    ramp_index: int = -1,
-    normalize: bool = True,
-    legend: list | None = None,
-    color_scheme: str = 'viridis',
-    xlim: tuple | None = None,
-    ylim: tuple | None = None
-) -> DSCTraceGraph
-```
-
-Create a comparison plot of the same ramp from multiple experiments.
-
 **Parameters:**
-- `instrument` - DSC instrument type
-- `file_paths` - List of data file paths
-- `graph_file` - Output graph path
-- `ramp_index` - Ramp to extract from each file (default: -1)
-- `normalize` - If True, normalize to baseline (default: True)
-- `legend` - Legend labels
-- `color_scheme` - Color scheme
-- `xlim` - X-axis limits
-- `ylim` - Y-axis limits
+- `instrument` (str): DSC instrument type (e.g., 'trios')
+- `file_path` (str): Path to DSC data file
+- `graph_file` (str): Output file path
+- `color_scheme` (str): Color scheme (default: `'viridis'`)
+- `xlim` (tuple, optional): X-axis limits (temp_min, temp_max)
+- `ylim` (tuple, optional): Y-axis limits (flow_min, flow_max)
 
-**Returns:** DSCTraceGraph object
+#### create_stacked_plot
 
-**Example:**
+Compare multiple samples by plotting specific ramps from each file.
+
 ```python
 files = ['sample1.csv', 'sample2.csv', 'sample3.csv']
+
 graph = DSCTraceGraph.create_stacked_plot(
-    'trios', files, 'comparison.png',
-    ramp_index=-1,
-    legend=['Sample 1', 'Sample 2', 'Sample 3'],
-    xlim=(0, 200)
+    instrument='trios',
+    file_paths=files,
+    graph_file='comparison.png',
+    ramp_index=-1,  # Second heating curve
+    normalize=True,  # Normalize each trace to endpoint
+    legend=['10% Loading', '20% Loading', '30% Loading'],
+    color_scheme='viridis',
+    xlim=(40, 80)
 )
 ```
 
----
+**Parameters:**
+- `instrument` (str): DSC instrument type
+- `file_paths` (list): List of file paths to compare
+- `graph_file` (str): Output file path
+- `ramp_index` (int): Which ramp to extract from each file (default: -1)
+- `normalize` (bool): Normalize each trace to its endpoint (default: False)
+- `legend` (list, optional): Legend labels
+- `color_scheme` (str): Color scheme
+- `xlim` (tuple, optional): X-axis limits
+- `ylim` (tuple, optional): Y-axis limits
 
-## Customization
+### Manual Construction
+
+```python
+from polychemtools.analysis import DSCTrace
+from polychemtools.visualization import DSCTraceGraph
+import numpy as np
+
+trace = DSCTrace.from_file('trios', 'experiment.csv', ramp_index=-1, reverse=True)
+
+# Plot raw and normalized data together
+y_data = np.column_stack([trace.heat_flows, trace.normalize_to_baseline()])
+
+graph = DSCTraceGraph(
+    x_values=trace.temperatures,
+    y_values=y_data,
+    xtitle='Temperature (C)',
+    ytitle='Heat Flow (W/g)',
+    legend=['Raw', 'Normalized'],
+    color_scheme='black'
+)
+graph.set_xbounds((30, 90))
+graph.save_graph('custom_dsc.png')
+```
+
+## Styling
 
 ### Custom Stylesheets
 
 All graph classes accept a `stylesheet` parameter for custom matplotlib styling:
 
 ```python
-graph = TraceGraph(x, y, 'X', 'Y', stylesheet='my_style.mplstyle')
+graph = TraceGraph(
+    x_values, y_values,
+    xtitle='X', ytitle='Y',
+    stylesheet='/path/to/custom.mplstyle'
+)
 ```
 
 ### Default Stylesheet
 
-The default stylesheet is located at:
-```
-polychemtools/visualization/default.mplstyle
+The default stylesheet is located at `polychemtools/visualization/default.mplstyle`. You can copy and modify this file to create custom styles.
+
+## Usage in Emacs Org-Mode
+
+The visualization module is designed for use in org-mode code blocks:
+
+```org
+#+begin_src python :session gpc :results file :file gpc_output.png
+from polychemtools.visualization import GPCTraceGraph
+
+sample = GPCTraceGraph.mw_graph_from_data(
+    'tosoh',
+    '../data/polymer_sample.txt',
+    '../data/calibrations.json:sample_calibration',
+    'gpc_output.png',
+    show_bounds=True
+)
+
+print(sample)
+'gpc_output.png'  # Return filename for org-mode display
+#+end_src
+
+#+RESULTS:
+[[file:gpc_output.png]]
 ```
